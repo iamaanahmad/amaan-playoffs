@@ -29,6 +29,31 @@ rote play run amaan-playoffs/git-handoff-snapshot@0.1.0 \
 
 The Play prints a readable handoff and a structured JSON result.
 
+## Example handoff
+
+A repository with staged, unstaged, and untracked changes produces a handoff like this:
+
+```text
+# Git handoff snapshot
+Repository: /work/repository
+Branch: main
+Run status: succeeded
+
+## Working tree
+- `A ` staged.txt
+- ` M` tracked.txt
+- `??` notes.txt
+
+## Recent commits
+- `8ec1081` 2026-08-27T17:44:39Z Add baseline
+
+Staged paths: 1
+Unstaged paths: 1
+Untracked paths: 1
+
+Privacy: reads Git metadata and diff statistics only. It does not read file contents or patch hunks.
+```
+
 ## Verify this source
 
 The repository mirrors the published `0.1.0` Play source and its presentation fixtures.
@@ -42,3 +67,8 @@ rote play run "$PWD/main.ts" repo="$PWD" commit_count=5
 
 `commit_count` defaults to `5`.
 
+Test the published Play across clean, dirty, detached, shallow, and no-upstream repositories:
+
+```sh
+resources/tests/test-repository-states.sh
+```
