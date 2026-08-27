@@ -1,8 +1,8 @@
 # Git handoff snapshot
 
-A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.1.0) for concise repository handoffs.
+A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.0) for concise repository handoffs.
 
-It reports the current branch, changed paths, diff statistics, untracked paths, and recent commit metadata. It never reads file contents or patch hunks.
+It reports HEAD, branch sync, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata. It never reads file contents or patch hunks.
 
 ## Run the published Play
 
@@ -15,19 +15,21 @@ Requirements:
 Inspect the exact release before execution:
 
 ```sh
-rote play inspect amaan-playoffs/git-handoff-snapshot@0.1.0 --json
+rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.0 --json
 ```
 
 Run it against a local repository:
 
 ```sh
-rote play run amaan-playoffs/git-handoff-snapshot@0.1.0 \
+rote play run amaan-playoffs/git-handoff-snapshot@0.2.0 \
   repo=/absolute/path/to/repository \
   commit_count=5 \
   --yes
 ```
 
-The Play prints a readable handoff and a structured JSON result.
+The `repo` value must be an absolute path to a local checkout. Values such as `owner/name` and `.` fail with one clear input error.
+
+The Play prints a readable handoff and a structured JSON result. `commit_count` is an integer and defaults to `5`.
 
 ## Example handoff
 
@@ -37,6 +39,8 @@ A repository with staged, unstaged, and untracked changes produces a handoff lik
 # Git handoff snapshot
 Repository: /work/repository
 Branch: main
+HEAD: 8ec1081d8cdbdb7809b0315a5107c725bd8a7a3f
+Sync: In sync with origin/main
 Run status: succeeded
 
 ## Working tree
@@ -45,18 +49,20 @@ Run status: succeeded
 - `??` notes.txt
 
 ## Recent commits
-- `8ec1081` 2026-08-27T17:44:39Z Add baseline
+- `8ec1081` 2026-08-27T17:44:39Z Play test: Add baseline
 
-Staged paths: 1
-Unstaged paths: 1
+Staged: 1 file(s), +1 / -0
+Unstaged: 1 file(s), +1 / -0
 Untracked paths: 1
+Conflicted paths: 0
+Stash entries: 1
 
 Privacy: reads Git metadata and diff statistics only. It does not read file contents or patch hunks.
 ```
 
 ## Verify this source
 
-The repository mirrors the published `0.1.0` Play source and its presentation fixtures.
+The repository mirrors the published `0.2.0` Play source and its presentation fixtures.
 
 ```sh
 rote deps check deps.toml
@@ -65,9 +71,7 @@ rote play lint ./main.ts --json
 rote play run "$PWD/main.ts" repo="$PWD" commit_count=5
 ```
 
-`commit_count` defaults to `5`.
-
-Test the published Play across clean, dirty, detached, shallow, and no-upstream repositories:
+Test the Play across clean, dirty, detached, shallow, no-upstream, and ahead repositories. The same test covers bad paths and JSON output.
 
 ```sh
 resources/tests/test-repository-states.sh

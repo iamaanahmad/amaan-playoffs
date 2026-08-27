@@ -1,4 +1,5 @@
-## main
+## main...origin/main [ahead 2, behind 1]
  M README.md
 A  notes.md
+R  old.txt -> new.txt
 ?? todo.txt
