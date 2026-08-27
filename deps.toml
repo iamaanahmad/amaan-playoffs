@@ -1,0 +1,15 @@
+schema_version = 1
+
+[[tools]]
+id = "git"
+command = "git"
+required = true
+version_requirement = ">=2.30.0"
+
+[[tools.install]]
+manager = "brew"
+package = "git"
+
+[[tools.install]]
+manager = "apt"
+package = "git"
