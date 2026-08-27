@@ -1,1 +1,1 @@
-/tmp/example-repository
+/home/dev/example

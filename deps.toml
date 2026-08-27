@@ -13,3 +13,16 @@ package = "git"
 [[tools.install]]
 manager = "apt"
 package = "git"
+
+[[tools]]
+id = "bash"
+command = "bash"
+required = true
+
+[[tools.install]]
+manager = "brew"
+package = "bash"
+
+[[tools.install]]
+manager = "apt"
+package = "bash"
