@@ -4,6 +4,8 @@ A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snap
 
 It reports HEAD, branch sync, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata. It never reads file contents or patch hunks.
 
+Its output can include repository paths, path names, author names, and commit subjects. Review the handoff before sharing it.
+
 ## Run the published Play
 
 Requirements:
@@ -76,3 +78,7 @@ Test the Play across clean, dirty, detached, shallow, no-upstream, and ahead rep
 ```sh
 resources/tests/test-repository-states.sh
 ```
+
+## Support
+
+For bugs or feature requests, [open a GitHub issue](https://github.com/iamaanahmad/amaan-playoffs/issues). For private questions, email [iamaanshaikh@cit.org.in](mailto:iamaanshaikh@cit.org.in).
