@@ -1,6 +1,6 @@
 # Git handoff snapshot
 
-A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.0) for concise repository handoffs.
+A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.1) for concise repository handoffs.
 
 It reports HEAD, branch sync, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata. It never reads file contents or patch hunks.
 
@@ -17,13 +17,13 @@ Requirements:
 Inspect the exact release before execution:
 
 ```sh
-rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.0 --json
+rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.1 --json
 ```
 
 Run it against a local repository:
 
 ```sh
-rote play run amaan-playoffs/git-handoff-snapshot@0.2.0 \
+rote play run amaan-playoffs/git-handoff-snapshot@0.2.1 \
   repo=/absolute/path/to/repository \
   commit_count=5 \
   --yes
@@ -64,7 +64,7 @@ Privacy: reads Git metadata and diff statistics only. It does not read file cont
 
 ## Verify this source
 
-The repository mirrors the published `0.2.0` Play source and its presentation fixtures.
+The repository mirrors the published `0.2.1` Play source and its presentation fixtures.
 
 ```sh
 rote deps check deps.toml
