@@ -11,14 +11,6 @@
  * source: https://git-scm.com/docs/git
  * provenance:
  *   author: Tin Computer
- * fixtures:
- * - resources/presentation-fixtures/repo_root/fixture.yaml
- * - resources/presentation-fixtures/head_sha/fixture.yaml
- * - resources/presentation-fixtures/worktree_status/fixture.yaml
- * - resources/presentation-fixtures/recent_commits/fixture.yaml
- * - resources/presentation-fixtures/unstaged_numstat/fixture.yaml
- * - resources/presentation-fixtures/staged_numstat/fixture.yaml
- * - resources/presentation-fixtures/stash_list/fixture.yaml
  * parameters:
  * - name: repo
  *   param_type: string
@@ -45,7 +37,7 @@
  *     allow_custom: true
  * metadata:
  *   rote_version: 0.74.0
- *   version: 0.2.0
+ *   version: 0.2.1
  *   status: released
  *   kind: atomic
  *   flow_type: parallel
@@ -84,7 +76,7 @@
  *     type: process.exec
  *     argv:
  *     - bash
- *     - "@resource{validate-repo-path.sh}"
+ *     - '@resource{validate-repo-path.sh}'
  *     - $repo
  *   head_sha:
  *     type: process.exec
