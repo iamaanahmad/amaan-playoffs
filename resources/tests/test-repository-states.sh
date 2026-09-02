@@ -93,25 +93,51 @@ grep -Eq '^Branch: feature$' "$test_root/results/no-upstream.txt"
 grep -Eq '^Sync: No upstream configured$' "$test_root/results/no-upstream.txt"
 grep -Eq '^Sync: 1 ahead of origin/main$' "$test_root/results/ahead.txt"
 
-json_output="$test_root/results/json.txt"
-rote play run "$play_ref" \
-  repo="$test_root/dirty" \
-  commit_count=5 \
-  --output=json \
-  "${consent_args[@]}" > "$json_output"
-python3 - "$json_output" <<'PY'
+for state in clean dirty detached shallow no-upstream ahead; do
+  json_output="$test_root/results/$state.json"
+  rote play run "$play_ref" \
+    repo="$test_root/$state" \
+    commit_count=5 \
+    --output=json \
+    "${consent_args[@]}" > "$json_output"
+
+  if grep -Fq "$secret_sentinel" "$json_output"; then
+    printf 'FAILED: %s JSON exposed file content\n' "$state" >&2
+    exit 1
+  fi
+
+  python3 - "$json_output" "$state" <<'PY'
 import json
+import re
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as handle:
     data = json.load(handle)
 
-assert data["stash_count"] == 1
-assert data["branch"]["name"] == "main"
+state = sys.argv[2]
+assert data["run_status"] == "succeeded"
+assert re.fullmatch(r"[0-9a-f]{40}", data["head"])
 assert data["privacy"]["reads_file_contents"] is False
 assert data["privacy"]["reads_patch_hunks"] is False
+assert data["privacy"]["writes_repository"] is False
 assert isinstance(data["input"]["commit_count"], int)
+
+if state == "dirty":
+    assert data["stash_count"] == 1
+    assert data["branch"]["name"] == "main"
+    assert len(data["changes"]["staged"]) == 1
+    assert len(data["changes"]["unstaged"]) == 1
+    assert len(data["changes"]["untracked"]) == 1
+elif state == "detached":
+    assert data["branch"]["detached"] is True
+elif state == "no-upstream":
+    assert data["branch"]["name"] == "feature"
+    assert data["branch"]["upstream"] is None
+elif state == "ahead":
+    assert data["branch"]["ahead"] == 1
 PY
+  printf 'PASS: %s JSON\n' "$state"
+done
 
 relative_output="$test_root/results/relative.txt"
 if rote play run "$play_ref" repo=owner/name commit_count=5 "${consent_args[@]}" > "$relative_output" 2>&1; then
