@@ -1,10 +1,36 @@
 # Git handoff snapshot
 
-A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.1) for concise repository handoffs.
+A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2) for concise repository handoffs.
 
-It reports HEAD, branch sync, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata. It never reads file contents or patch hunks.
+It reports HEAD, last-fetched branch state, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata.
+
+Git reads local repository data to calculate these values. The Play does not output file contents or patch hunks.
 
 Its output can include repository paths, path names, author names, and commit subjects. Review the handoff before sharing it.
+
+## Judge this in 60 seconds
+
+Inspect the exact release:
+
+```sh
+rote play inspect https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2 --json
+```
+
+Run it against any local checkout:
+
+```sh
+rote play run https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2 \
+  repo=/absolute/path/to/repository \
+  commit_count=5 \
+  --yes
+```
+
+Check four proof points in the result:
+
+- Sync uses the last-fetched tracking reference. The Play does not fetch a remote.
+- Unicode paths stay readable. Markdown-like metadata stays inert in the readable handoff.
+- The privacy note states what Git reads and what the Play outputs.
+- The readiness verdict gives one safe next action.
 
 ## Run the published Play
 
@@ -17,13 +43,13 @@ Requirements:
 Inspect the exact release before execution:
 
 ```sh
-rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.1 --json
+rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.2 --json
 ```
 
 Run it against a local repository:
 
 ```sh
-rote play run amaan-playoffs/git-handoff-snapshot@0.2.1 \
+rote play run amaan-playoffs/git-handoff-snapshot@0.2.2 \
   repo=/absolute/path/to/repository \
   commit_count=5 \
   --yes
@@ -31,7 +57,9 @@ rote play run amaan-playoffs/git-handoff-snapshot@0.2.1 \
 
 The `repo` value must be an absolute path to a local checkout. Values such as `owner/name` and `.` fail with one clear input error.
 
-The Play prints a readable handoff and a structured JSON result. `commit_count` is an integer and defaults to `5`.
+The Play prints a readable handoff and a structured JSON result. `commit_count` defaults to `5` and accepts `1` through `20`.
+
+Run it before an agent handoff, after returning to a branch, or before code review.
 
 ## Example handoff
 
@@ -39,19 +67,20 @@ A repository with staged, unstaged, and untracked changes produces a handoff lik
 
 ```text
 # Git handoff snapshot
-Repository: /work/repository
-Branch: main
-HEAD: 8ec1081d8cdbdb7809b0315a5107c725bd8a7a3f
-Sync: In sync with origin/main
+Repository: `/work/repository`
+Branch: `main`
+HEAD: `8ec1081d8cdbdb7809b0315a5107c725bd8a7a3f`
+Sync: Matches last-fetched `origin/main`
+Remote fetch: Not performed
 Run status: succeeded
 
 ## Working tree
-- `A ` staged.txt
-- ` M` tracked.txt
-- `??` notes.txt
+- `A ` `staged.txt`
+- ` M` `tracked.txt`
+- `??` `notes.txt`
 
 ## Recent commits
-- `8ec1081` 2026-08-27T17:44:39Z Play test: Add baseline
+- `8ec1081` 2026-08-27T17:44:39Z `Play test`: `Add baseline`
 
 Staged: 1 file(s), +1 / -0
 Unstaged: 1 file(s), +1 / -0
@@ -59,12 +88,15 @@ Untracked paths: 1
 Conflicted paths: 0
 Stash entries: 1
 
-Privacy: reads Git metadata and diff statistics only. It does not read file contents or patch hunks.
+Handoff readiness: READY
+Next action: Review the listed paths, then share this handoff.
+
+Privacy: Git reads local repository data to calculate metadata and numeric diff totals. Output excludes file contents and patch hunks.
 ```
 
 ## Verify this source
 
-The repository mirrors the published `0.2.1` Play source and its presentation fixtures.
+The repository mirrors the published `0.2.2` Play source and its presentation fixtures.
 
 ```sh
 rote deps check deps.toml
@@ -73,7 +105,7 @@ rote play lint ./main.ts --json
 rote play run "$PWD/main.ts" repo="$PWD" commit_count=5
 ```
 
-Test the Play across clean, dirty, detached, shallow, no-upstream, and ahead repositories. The same test covers bad paths and JSON output.
+The regression suite covers old and new repository states, unsafe metadata, input bounds, and JSON output.
 
 ```sh
 resources/tests/test-repository-states.sh

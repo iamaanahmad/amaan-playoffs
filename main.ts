@@ -2,12 +2,12 @@
 /**
  * Git Handoff Snapshot
  *
- * Produces a compact Git handoff from repository metadata without reading file contents or patch hunks.
+ * Produces a compact Git handoff without outputting file contents or patch hunks.
  *
  * @rote-frontmatter
  * ---
  * name: git-handoff-snapshot
- * description: Creates a compact Git handoff with branch, upstream ahead/behind, HEAD, changed paths, numstat diff statistics, stash count, and recent commit metadata without reading file contents or patch hunks.
+ * description: Creates a compact Git handoff with branch, last-fetched upstream state, changed paths, numeric diff totals, stash count, and recent commit metadata without outputting file contents or patch hunks.
  * source: https://git-scm.com/docs/git
  * provenance:
  *   author: Tin Computer
@@ -23,7 +23,7 @@
  *   param_type: integer
  *   required: false
  *   default: '5'
- *   description: Number of most recent commits to include (git log -n).
+ *   description: Number of most recent commits to include. Accepted range is 1 through 20.
  *   example: '10'
  *   input:
  *     label: Recent commit count
@@ -37,7 +37,7 @@
  *     allow_custom: true
  * metadata:
  *   rote_version: 0.74.0
- *   version: 0.2.1
+ *   version: 0.2.2
  *   status: released
  *   kind: atomic
  *   flow_type: parallel
@@ -78,6 +78,7 @@
  *     - bash
  *     - '@resource{validate-repo-path.sh}'
  *     - $repo
+ *     - $commit_count
  *   head_sha:
  *     type: process.exec
  *     depends_on:
@@ -97,6 +98,8 @@
  *     - git
  *     - -c
  *     - color.ui=never
+ *     - -c
+ *     - core.quotePath=false
  *     - -C
  *     - $repo
  *     - --no-optional-locks
@@ -126,6 +129,8 @@
  *     - git
  *     - -c
  *     - color.ui=never
+ *     - -c
+ *     - core.quotePath=false
  *     - -C
  *     - $repo
  *     - --no-optional-locks
@@ -139,6 +144,8 @@
  *     - git
  *     - -c
  *     - color.ui=never
+ *     - -c
+ *     - core.quotePath=false
  *     - -C
  *     - $repo
  *     - --no-optional-locks
@@ -243,11 +250,12 @@ const requestedRepo = String(ctx.params.repo ?? "");
 // The gate step is `git -C $repo rev-parse --show-toplevel`. Its stderr is the
 // only reliable signal for "path missing" vs "not a repository"; every other
 // step is blocked on it so a bad input produces one error, not seven.
-type InputProblem = { kind: "missing_path" | "not_a_repository" | "git_error"; detail: string };
+type InputProblem = { kind: "invalid_commit_count" | "missing_path" | "not_a_repository" | "git_error"; detail: string };
 
 function classifyInput(root: ProcessObservation): InputProblem | null {
   if (root.ok) return null;
   const detail = (root.message ?? "").trim();
+  if (/commit_count must be/i.test(detail)) return { kind: "invalid_commit_count", detail };
   if (/cannot change to/i.test(detail)) return { kind: "missing_path", detail };
   if (/not a git repository/i.test(detail)) return { kind: "not_a_repository", detail };
   return { kind: "git_error", detail: detail || `repo_root ${root.status}` };
@@ -356,38 +364,81 @@ const stepStatuses = Object.fromEntries(
 const failedSteps = STEPS.filter((name) => !obs[name].ok);
 
 // --- Rendering ----------------------------------------------------------------
+function inlineCode(value: string): string {
+  const longestRun = Math.max(0, ...Array.from(value.matchAll(/`+/g), (match) => match[0].length));
+  const fence = "`".repeat(longestRun + 1);
+  const padding = value.startsWith("`") || value.endsWith("`") ? " " : "";
+  return `${fence}${padding}${value}${padding}${fence}`;
+}
+
 function describeInputProblem(problem: InputProblem): string {
   switch (problem.kind) {
+    case "invalid_commit_count":
+      return problem.detail;
     case "missing_path":
-      return `The \`repo\` path \`${requestedRepo}\` does not exist on this machine. Pass a local checkout path (e.g. \`/Users/me/src/my-repo\`), not a GitHub \`owner/name\`.`;
+      return `The \`repo\` path ${inlineCode(requestedRepo)} does not exist on this machine. Pass a local checkout path, not a GitHub \`owner/name\`.`;
     case "not_a_repository":
-      return `The \`repo\` path \`${requestedRepo}\` exists but is not inside a Git repository (no \`.git\` found in it or any parent). Pass the absolute path of a checkout; a relative path such as \`.\` resolves against the play's working directory, not your shell.`;
+      return `The \`repo\` path ${inlineCode(requestedRepo)} exists but is not inside a Git repository. Pass the absolute path of a checkout.`;
     case "git_error":
-      return `git could not open \`${requestedRepo}\`: ${problem.detail}`;
+      return `Git could not inspect ${inlineCode(requestedRepo)}: ${problem.detail}`;
   }
 }
 
 function syncLine(state: BranchState): string {
   if (state.detached) return "Detached HEAD (no branch checked out)";
   if (!state.upstream) return "No upstream configured";
-  if (state.gone) return `Upstream ${state.upstream} is gone`;
-  if (state.ahead === 0 && state.behind === 0) return `In sync with ${state.upstream}`;
+  if (state.gone) return `Last-fetched upstream ${inlineCode(state.upstream)} is gone`;
+  if (state.ahead === 0 && state.behind === 0) return `Matches last-fetched ${inlineCode(state.upstream)}`;
   const parts: string[] = [];
   if (state.ahead > 0) parts.push(`${state.ahead} ahead`);
   if (state.behind > 0) parts.push(`${state.behind} behind`);
-  return `${parts.join(", ")} of ${state.upstream}`;
+  return `Compared with last-fetched ${inlineCode(state.upstream)}: ${parts.join(", ")}`;
 }
 
 function pathLines(items: ChangedPath[]): string {
   if (items.length === 0) return "- None";
   return items
-    .map((item) => `- \`${item.code}\` ${item.original_path ? `${item.original_path} -> ` : ""}${item.path}`)
+    .map((item) => `- ${inlineCode(item.code)} ${item.original_path ? `${inlineCode(item.original_path)} -> ` : ""}${inlineCode(item.path)}`)
     .join("\n");
 }
 
 function statLine(label: string, t: { files: number; added: number; deleted: number }): string {
   return `${label}: ${t.files} file(s), +${t.added} / -${t.deleted}`;
 }
+
+type ReadinessVerdict = "ready" | "attention" | "blocked";
+type Readiness = { verdict: ReadinessVerdict; reasons: string[]; next_action: string };
+
+function assessReadiness(): Readiness {
+  if (inputProblem || failedSteps.length > 0) {
+    return {
+      verdict: "blocked",
+      reasons: inputProblem ? [inputProblem.kind] : failedSteps.map((name) => `failed_step:${name}`),
+      next_action: "Fix the failed Git checks, then rerun this Play.",
+    };
+  }
+  if (conflicted.length > 0) {
+    return { verdict: "blocked", reasons: ["conflicted_paths"], next_action: "Resolve the conflicted paths before handing off." };
+  }
+  if (branch.gone) {
+    return { verdict: "attention", reasons: ["upstream_gone"], next_action: "Confirm or replace the missing upstream before handing off." };
+  }
+  if (branch.behind > 0) {
+    return { verdict: "attention", reasons: ["behind_last_fetched_upstream"], next_action: "Review the last-fetched upstream changes before handing off." };
+  }
+  if (branch.detached) {
+    return { verdict: "attention", reasons: ["detached_head"], next_action: "Record why HEAD is detached before handing off." };
+  }
+  if (!branch.upstream) {
+    return { verdict: "attention", reasons: ["no_upstream"], next_action: "Name the intended upstream branch in the handoff." };
+  }
+  if (changedPaths.length > 0) {
+    return { verdict: "ready", reasons: ["local_changes_present"], next_action: "Review the listed paths, then share this handoff." };
+  }
+  return { verdict: "ready", reasons: ["clean_worktree"], next_action: "Share this snapshot with the next developer or agent." };
+}
+
+const readiness = assessReadiness();
 
 const human: string[] = ["# Git handoff snapshot"];
 
@@ -397,13 +448,16 @@ if (inputProblem) {
     `**Input error:** ${describeInputProblem(inputProblem)}`,
     "",
     `Run status: ${ctx.run.status}`,
+    `Handoff readiness: ${readiness.verdict.toUpperCase()}`,
+    `Next action: ${readiness.next_action}`,
   );
 } else {
   human.push(
-    `Repository: ${repoRoot ?? "unavailable"}`,
-    `Branch: ${branch.name ?? "unavailable"}`,
-    `HEAD: ${headSha ?? "unavailable"}`,
+    `Repository: ${repoRoot ? inlineCode(repoRoot) : "unavailable"}`,
+    `Branch: ${branch.name ? inlineCode(branch.name) : "unavailable"}`,
+    `HEAD: ${headSha ? inlineCode(headSha) : "unavailable"}`,
     `Sync: ${syncLine(branch)}`,
+    "Remote fetch: Not performed",
     `Run status: ${ctx.run.status}`,
     "",
     "## Working tree",
@@ -411,7 +465,7 @@ if (inputProblem) {
     "",
     "## Recent commits",
     recentCommits.length > 0
-      ? recentCommits.map((c) => `- \`${c.short_sha}\` ${c.date} ${c.author}: ${c.subject}`).join("\n")
+      ? recentCommits.map((c) => `- ${inlineCode(c.short_sha)} ${c.date} ${inlineCode(c.author)}: ${inlineCode(c.subject)}`).join("\n")
       : "- None",
     "",
     statLine("Staged", stagedTotals),
@@ -419,6 +473,9 @@ if (inputProblem) {
     `Untracked paths: ${untracked.length}`,
     `Conflicted paths: ${conflicted.length}`,
     `Stash entries: ${stashCount}`,
+    "",
+    `Handoff readiness: ${readiness.verdict.toUpperCase()}`,
+    `Next action: ${readiness.next_action}`,
   );
   if (failedSteps.length > 0) {
     human.push("", "## Incomplete evidence");
@@ -426,7 +483,7 @@ if (inputProblem) {
   }
 }
 
-human.push("", "Privacy: reads Git metadata and diff statistics only. It does not read file contents or patch hunks.");
+human.push("", "Privacy: Git reads local repository data to calculate metadata and numeric diff totals. Output excludes file contents and patch hunks.");
 
 out.human(human.join("\n"));
 
@@ -453,6 +510,8 @@ out.result({
     ahead: branch.ahead,
     behind: branch.behind,
     upstream_gone: branch.gone,
+    comparison_basis: "last_fetched_tracking_reference",
+    remote_fetch_performed: false,
   },
   changes: {
     staged,
@@ -468,10 +527,11 @@ out.result({
   },
   stash_count: stashCount,
   steps: stepStatuses,
+  readiness,
   privacy: {
-    reads_file_contents: false,
-    reads_patch_hunks: false,
-    reads_git_metadata: true,
+    git_reads_local_repository_data: true,
+    outputs_file_contents: false,
+    outputs_patch_hunks: false,
     writes_repository: false,
   },
 });

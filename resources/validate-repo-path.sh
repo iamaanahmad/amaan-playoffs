@@ -2,6 +2,12 @@
 set -euo pipefail
 
 repo_path="${1:-}"
+commit_count="${2:-}"
+
+if [[ ! "$commit_count" =~ ^[0-9]+$ ]] || (( 10#$commit_count < 1 || 10#$commit_count > 20 )); then
+  printf '%s\n' 'commit_count must be an integer from 1 through 20.' >&2
+  exit 64
+fi
 
 if [[ -z "$repo_path" ]]; then
   printf '%s\n' 'The repo path is required. Pass an absolute local checkout path.' >&2
