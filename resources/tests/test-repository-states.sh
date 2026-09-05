@@ -61,6 +61,28 @@ printf 'independent\n' > "$test_root/no-upstream/tracked.txt"
 git -C "$test_root/no-upstream" add tracked.txt
 git -C "$test_root/no-upstream" commit -q -m "Add independent baseline"
 
+git init -q -b feature "$test_root/local-dirty"
+configure_git "$test_root/local-dirty"
+printf 'independent\n' > "$test_root/local-dirty/tracked.txt"
+git -C "$test_root/local-dirty" add tracked.txt
+git -C "$test_root/local-dirty" commit -q -m "Add independent baseline"
+printf '%s\n' "$secret_sentinel" >> "$test_root/local-dirty/tracked.txt"
+
+git init -q -b feature "$test_root/remote-no-upstream"
+configure_git "$test_root/remote-no-upstream"
+printf 'independent\n' > "$test_root/remote-no-upstream/tracked.txt"
+git -C "$test_root/remote-no-upstream" add tracked.txt
+git -C "$test_root/remote-no-upstream" commit -q -m "Add independent baseline"
+git -C "$test_root/remote-no-upstream" remote add origin "$source_repo"
+printf '%s\n' "$secret_sentinel" >> "$test_root/remote-no-upstream/tracked.txt"
+
+git init -q -b feature "$test_root/remote-no-upstream-clean"
+configure_git "$test_root/remote-no-upstream-clean"
+printf 'independent\n' > "$test_root/remote-no-upstream-clean/tracked.txt"
+git -C "$test_root/remote-no-upstream-clean" add tracked.txt
+git -C "$test_root/remote-no-upstream-clean" commit -q -m "Add independent baseline"
+git -C "$test_root/remote-no-upstream-clean" remote add origin "$source_repo"
+
 printf 'ahead\n' > "$test_root/ahead/ahead.txt"
 git -C "$test_root/ahead" add ahead.txt
 git -C "$test_root/ahead" commit -q -m "Add local commit"
@@ -78,6 +100,8 @@ git -C "$test_root/publisher" push -q origin main
 git -C "$test_root/behind" fetch -q origin
 git -C "$test_root/diverged" fetch -q origin
 git -C "$test_root/gone-upstream" update-ref -d refs/remotes/origin/main
+printf '%s\n' "$secret_sentinel" >> "$test_root/behind/tracked.txt"
+printf '%s\n' "$secret_sentinel" >> "$test_root/gone-upstream/tracked.txt"
 
 git -C "$test_root/conflict" checkout -q -b side
 printf 'side\n' > "$test_root/conflict/tracked.txt"
@@ -103,7 +127,7 @@ git -C "$test_root/markdown" -c user.name="$markdown_author" -c user.email=play-
 
 mkdir -p "$test_root/results"
 
-states=(clean dirty detached shallow no-upstream ahead stale behind diverged gone-upstream conflict unicode markdown)
+states=(clean dirty detached shallow no-upstream local-dirty remote-no-upstream remote-no-upstream-clean ahead stale behind diverged gone-upstream conflict unicode markdown)
 
 for state in "${states[@]}"; do
   output="$test_root/results/$state.txt"
@@ -137,12 +161,24 @@ grep -Fq 'Branch: `HEAD`' "$test_root/results/detached.txt"
 grep -Eq '^Sync: Detached HEAD \(no branch checked out\)$' "$test_root/results/detached.txt"
 grep -Eq '^Handoff readiness: ATTENTION$' "$test_root/results/detached.txt"
 grep -Fq 'Branch: `feature`' "$test_root/results/no-upstream.txt"
-grep -Eq '^Sync: No upstream configured$' "$test_root/results/no-upstream.txt"
+grep -Eq '^Sync: Local-only repository \(no remotes configured\)$' "$test_root/results/no-upstream.txt"
+grep -Eq '^Handoff readiness: READY$' "$test_root/results/no-upstream.txt"
+grep -Fq 'Next action: Share this local-only snapshot. Add a remote only if collaboration needs one.' "$test_root/results/no-upstream.txt"
+grep -Eq '^Sync: Local-only repository \(no remotes configured\)$' "$test_root/results/local-dirty.txt"
+grep -Fq 'Next action: Review the listed paths, then share this handoff.' "$test_root/results/local-dirty.txt"
+grep -Eq '^Sync: No upstream configured$' "$test_root/results/remote-no-upstream.txt"
+grep -Eq '^Handoff readiness: ATTENTION$' "$test_root/results/remote-no-upstream.txt"
+grep -Fq 'Next action: Name the intended upstream branch in the handoff.' "$test_root/results/remote-no-upstream.txt"
+grep -Eq '^Sync: No upstream configured$' "$test_root/results/remote-no-upstream-clean.txt"
+grep -Eq '^Handoff readiness: ATTENTION$' "$test_root/results/remote-no-upstream-clean.txt"
+grep -Fq 'Next action: Name the intended upstream branch in the handoff.' "$test_root/results/remote-no-upstream-clean.txt"
 grep -Fq 'Sync: Compared with last-fetched `origin/main`: 1 ahead' "$test_root/results/ahead.txt"
 grep -Fq 'Sync: Matches last-fetched `origin/main`' "$test_root/results/stale.txt"
 grep -Fq 'Sync: Compared with last-fetched `origin/main`: 1 behind' "$test_root/results/behind.txt"
+grep -Eq '^Handoff readiness: ATTENTION$' "$test_root/results/behind.txt"
 grep -Fq 'Sync: Compared with last-fetched `origin/main`: 1 ahead, 1 behind' "$test_root/results/diverged.txt"
 grep -Fq 'Sync: Last-fetched upstream `origin/main` is gone' "$test_root/results/gone-upstream.txt"
+grep -Eq '^Handoff readiness: ATTENTION$' "$test_root/results/gone-upstream.txt"
 grep -Eq '^Conflicted paths: 1$' "$test_root/results/conflict.txt"
 grep -Eq '^Handoff readiness: BLOCKED$' "$test_root/results/conflict.txt"
 grep -Fq "\`$unicode_path\`" "$test_root/results/unicode.txt"
@@ -199,7 +235,10 @@ expected_verdict = {
     "dirty": "ready",
     "detached": "attention",
     "shallow": "ready",
-    "no-upstream": "attention",
+    "no-upstream": "ready",
+    "local-dirty": "ready",
+    "remote-no-upstream": "attention",
+    "remote-no-upstream-clean": "attention",
     "ahead": "ready",
     "stale": "ready",
     "behind": "attention",
@@ -222,15 +261,31 @@ elif state == "detached":
 elif state == "no-upstream":
     assert data["branch"]["name"] == "feature"
     assert data["branch"]["upstream"] is None
+    assert data["branch"]["remotes"] == []
+    assert data["readiness"]["reasons"] == ["local_only_repository"]
+elif state == "local-dirty":
+    assert data["branch"]["upstream"] is None
+    assert data["branch"]["remotes"] == []
+    assert data["readiness"]["reasons"] == ["local_changes_present"]
+elif state == "remote-no-upstream":
+    assert data["branch"]["upstream"] is None
+    assert data["branch"]["remotes"] == ["origin"]
+    assert data["readiness"]["reasons"] == ["no_upstream"]
+elif state == "remote-no-upstream-clean":
+    assert data["branch"]["upstream"] is None
+    assert data["branch"]["remotes"] == ["origin"]
+    assert data["readiness"]["reasons"] == ["no_upstream"]
 elif state == "ahead":
     assert data["branch"]["ahead"] == 1
 elif state == "behind":
     assert data["branch"]["behind"] == 1
+    assert data["readiness"]["reasons"] == ["behind_last_fetched_upstream"]
 elif state == "diverged":
     assert data["branch"]["ahead"] == 1
     assert data["branch"]["behind"] == 1
 elif state == "gone-upstream":
     assert data["branch"]["upstream_gone"] is True
+    assert data["readiness"]["reasons"] == ["upstream_gone"]
 elif state == "conflict":
     assert len(data["changes"]["conflicted"]) == 1
 elif state == "unicode":

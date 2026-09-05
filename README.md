@@ -1,6 +1,6 @@
 # Git handoff snapshot
 
-A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2) for concise repository handoffs.
+A secret-safe [Rote Play](https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.3) for concise repository handoffs.
 
 It reports HEAD, last-fetched branch state, changed paths, numeric diff totals, conflicts, stashes, and recent commit metadata.
 
@@ -13,13 +13,13 @@ Its output can include repository paths, path names, author names, and commit su
 Inspect the exact release:
 
 ```sh
-rote play inspect https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2 --json
+rote play inspect https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.3 --json
 ```
 
 Run it against any local checkout:
 
 ```sh
-rote play run https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.2 \
+rote play run https://play.modiqo.ai/amaan-playoffs/git-handoff-snapshot@0.2.3 \
   repo=/absolute/path/to/repository \
   commit_count=5 \
   --yes
@@ -43,13 +43,13 @@ Requirements:
 Inspect the exact release before execution:
 
 ```sh
-rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.2 --json
+rote play inspect amaan-playoffs/git-handoff-snapshot@0.2.3 --json
 ```
 
 Run it against a local repository:
 
 ```sh
-rote play run amaan-playoffs/git-handoff-snapshot@0.2.2 \
+rote play run amaan-playoffs/git-handoff-snapshot@0.2.3 \
   repo=/absolute/path/to/repository \
   commit_count=5 \
   --yes
@@ -96,7 +96,7 @@ Privacy: Git reads local repository data to calculate metadata and numeric diff 
 
 ## Verify this source
 
-The repository mirrors the published `0.2.2` Play source and its presentation fixtures.
+The repository mirrors the published `0.2.3` Play source and its presentation fixtures.
 
 ```sh
 rote deps check deps.toml
