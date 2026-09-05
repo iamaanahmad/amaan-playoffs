@@ -37,7 +37,7 @@
  *     allow_custom: true
  * metadata:
  *   rote_version: 0.74.0
- *   version: 0.2.2
+ *   version: 0.2.3
  *   status: released
  *   kind: atomic
  *   flow_type: parallel
@@ -71,6 +71,7 @@
  *   unstaged_numstat: resources/presentation-fixtures/unstaged_numstat/fixture.yaml
  *   staged_numstat: resources/presentation-fixtures/staged_numstat/fixture.yaml
  *   stash_list: resources/presentation-fixtures/stash_list/fixture.yaml
+ *   remote_list: resources/presentation-fixtures/remote_list/fixture.yaml
  * steps:
  *   repo_root:
  *     type: process.exec
@@ -165,6 +166,17 @@
  *     - stash
  *     - list
  *     - --format=%gd
+ *   remote_list:
+ *     type: process.exec
+ *     depends_on:
+ *     - repo_root
+ *     argv:
+ *     - git
+ *     - -c
+ *     - color.ui=never
+ *     - -C
+ *     - $repo
+ *     - remote
  * ---
  */
 
@@ -231,6 +243,7 @@ const STEPS = [
   "unstaged_numstat",
   "staged_numstat",
   "stash_list",
+  "remote_list",
 ] as const;
 type Step = (typeof STEPS)[number];
 
@@ -242,6 +255,7 @@ const obs: Record<Step, ProcessObservation> = {
   unstaged_numstat: readProcess(ctx.step(stepName("unstaged_numstat"))),
   staged_numstat: readProcess(ctx.step(stepName("staged_numstat"))),
   stash_list: readProcess(ctx.step(stepName("stash_list"))),
+  remote_list: readProcess(ctx.step(stepName("remote_list"))),
 };
 
 const requestedRepo = String(ctx.params.repo ?? "");
@@ -351,6 +365,7 @@ const stagedStat = parseNumstat(obs.staged_numstat.stdout);
 const unstagedTotals = totals(unstagedStat);
 const stagedTotals = totals(stagedStat);
 const stashCount = lines(obs.stash_list.stdout).length;
+const remotes = lines(obs.remote_list.stdout);
 
 const recentCommits = lines(obs.recent_commits.stdout).map((line) => {
   const [short_sha = "", sha = "", date = "", author = "", ...subjectParts] = line.split("\t");
@@ -384,8 +399,9 @@ function describeInputProblem(problem: InputProblem): string {
   }
 }
 
-function syncLine(state: BranchState): string {
+function syncLine(state: BranchState, configuredRemotes: string[]): string {
   if (state.detached) return "Detached HEAD (no branch checked out)";
+  if (!state.upstream && configuredRemotes.length === 0) return "Local-only repository (no remotes configured)";
   if (!state.upstream) return "No upstream configured";
   if (state.gone) return `Last-fetched upstream ${inlineCode(state.upstream)} is gone`;
   if (state.ahead === 0 && state.behind === 0) return `Matches last-fetched ${inlineCode(state.upstream)}`;
@@ -430,6 +446,16 @@ function assessReadiness(): Readiness {
     return { verdict: "attention", reasons: ["detached_head"], next_action: "Record why HEAD is detached before handing off." };
   }
   if (!branch.upstream) {
+    if (remotes.length === 0) {
+      if (changedPaths.length > 0) {
+        return { verdict: "ready", reasons: ["local_changes_present"], next_action: "Review the listed paths, then share this handoff." };
+      }
+      return {
+        verdict: "ready",
+        reasons: ["local_only_repository"],
+        next_action: "Share this local-only snapshot. Add a remote only if collaboration needs one.",
+      };
+    }
     return { verdict: "attention", reasons: ["no_upstream"], next_action: "Name the intended upstream branch in the handoff." };
   }
   if (changedPaths.length > 0) {
@@ -456,7 +482,7 @@ if (inputProblem) {
     `Repository: ${repoRoot ? inlineCode(repoRoot) : "unavailable"}`,
     `Branch: ${branch.name ? inlineCode(branch.name) : "unavailable"}`,
     `HEAD: ${headSha ? inlineCode(headSha) : "unavailable"}`,
-    `Sync: ${syncLine(branch)}`,
+    `Sync: ${syncLine(branch, remotes)}`,
     "Remote fetch: Not performed",
     `Run status: ${ctx.run.status}`,
     "",
@@ -490,7 +516,7 @@ out.human(human.join("\n"));
 out.summary(
   inputProblem
     ? `input error: ${inputProblem.kind.replace(/_/g, " ")} (${requestedRepo})`
-    : `${branch.name ?? "unknown branch"} @ ${headSha?.slice(0, 7) ?? "?"}: ${changedPaths.length} changed path(s), ${syncLine(branch).toLowerCase()}, ${recentCommits.length} recent commit(s)`,
+    : `${branch.name ?? "unknown branch"} @ ${headSha?.slice(0, 7) ?? "?"}: ${changedPaths.length} changed path(s), ${syncLine(branch, remotes).toLowerCase()}, ${recentCommits.length} recent commit(s)`,
 );
 
 out.result({
@@ -512,6 +538,7 @@ out.result({
     upstream_gone: branch.gone,
     comparison_basis: "last_fetched_tracking_reference",
     remote_fetch_performed: false,
+    remotes,
   },
   changes: {
     staged,
